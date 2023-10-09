@@ -12,8 +12,12 @@ There is a nice, pre-existing python interface to NAUTY, `pynauty <https://githu
 
 Usage of ``nautypy`` is demonstrated in the examples. Translation between multigraphs and simple graphs is explained in detail in ``examples/3flavor_hostgraphs.py`` and in the documentation.
 
+Reference documentation is available at https://zandermoss.github.io/nautypy/
+
 Installation
 ============
+* Source code is available at https://github.com/zandermoss/nautypy
+
 * The C interface to NAUTY, ``libnautypy``, is built from source (``src/nautypy.c``, ``include/nautypy.h``) using the `Meson build system <https://mesonbuild.com>`_.
   If you are unfamiliar with Meson, take a look at their `in-depth tutorial <https://mesonbuild.com/IndepthTutorial.html>`_.
 
@@ -110,8 +114,6 @@ Testing
 Documentation
 =============
 * Docs built with `Sphinx <https://www.sphinx-doc.org/>`_.
-
-* Complete documentation available at https://zandermoss.github.io/nautypy/
 
 Building Docs
 -------------
