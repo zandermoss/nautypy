@@ -16,7 +16,7 @@ Reference documentation is available at https://zandermoss.github.io/nautypy/
 
 Installation
 ============
-* Source code is available at https://github.com/zandermoss/nautypy
+* Source code is available at https://github.com/zandermoss/nautypy/
 
 * The C interface to NAUTY, ``libnautypy``, is built from source (``src/nautypy.c``, ``include/nautypy.h``) using the `Meson build system <https://mesonbuild.com>`_.
   If you are unfamiliar with Meson, take a look at their `in-depth tutorial <https://mesonbuild.com/IndepthTutorial.html>`_.
