@@ -39,7 +39,28 @@ QuickStart
     python3 setup.py build_ext
     pip install .
 
-* Try it out with one of the example scripts.
+Examples
+========
+* Two simple example scripts are provided in ``examples/``.
+* ``3flavor.py`` uses nautypy to compute the canonical labelings
+  of a small multigraph with three "flavors" (colors) of vertices and edges
+  and a vertex-permutation of that multigraph. The equality of the two
+  canonically labeled multigraphs verifies their isomorphism.
+* ``3flavor_hostgraphs.py`` canonizes the permuted multigraph from 
+  ``3flavor.py``, but displays the simple "host" graph into which 
+  nautypy internally embeds the multigraph before feeding it to NAUTY,
+  as well as the canonical labeling of this hostgraph. Hopefully this
+  will demystify nautypy's approach to multigraphs.
 
-
-FIXME: testing!
+Testing
+=======
+* In ``test/``, two testing scripts are provided (along with some modules
+  used by these tests). Both scripts repeatedly compare the output of 
+  the VF2 graph-matching algorithm (implemented in NetworkX) and the output
+  of nautypy in isomorphism tests of random multigraphs and certain variants
+  of these graphs (details are given in ``comparison.py`` and in the scripts).
+* ``interactive_testing.py`` is a verbose, visual, graph-by-graph implementation
+  of these tests.
+* ``test_nautypy.py`` provides an interface from ``comparison``
+  to `Pytest <https://pytest.org/>`_.
+* To invoke pytest with verbose output, cd to ``test/`` and run ``pytest -rA``

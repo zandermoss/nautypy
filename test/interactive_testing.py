@@ -21,6 +21,9 @@ and if so, to produce a relabeling map realizing the isomorphism.
 For each multigraph and variant, we are essentially looking for
 agreement between VF2 and nautypy. The meat of the test is the
 ``compare`` function, and details are provided there.
+
+To advance to the next graph, simply close the matplotlib window
+from the previous graph.
 """
 
 #==========[Options/Parameters]==========#

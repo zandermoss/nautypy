@@ -46,7 +46,7 @@ mg.add_edge(0,4,color="red")
 mg.add_edge(1,4,color="green")
 mg.add_edge(2,5,color="red")
 mg.add_edge(3,5,color="green")
-mg.add_edge(4,5,color="orange")
+mg.add_edge(4,5,color="blue")
 mg.add_edge(4,5,color="blue")
 
 #Permute multigraph.
