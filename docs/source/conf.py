@@ -20,7 +20,8 @@ release = '1.0'
 extensions = ['sphinx_rtd_theme',
               'sphinx.ext.napoleon',
               'sphinx.ext.autodoc',
-              'sphinx.ext.autosummary'
+              'sphinx.ext.autosummary',
+              'sphinx.ext.githubpages'
               ]
 
 templates_path = ['_templates']
