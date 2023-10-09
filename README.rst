@@ -37,7 +37,7 @@ QuickStart
     cd python
     (if python/build/ exists, rm -rf build/)
     python3 setup.py build_ext
-    sudo pip install .
+    pip install .
 
 * Try it out with one of the example scripts.
 

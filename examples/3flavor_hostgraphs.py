@@ -46,7 +46,7 @@ mg.add_edge(0,4,color="red")
 mg.add_edge(1,4,color="green")
 mg.add_edge(2,5,color="red")
 mg.add_edge(3,5,color="green")
-mg.add_edge(4,5,color="blue")
+mg.add_edge(4,5,color="orange")
 mg.add_edge(4,5,color="blue")
 
 #Permute multigraph.
@@ -54,7 +54,8 @@ mg_perm = nx.relabel_nodes(mg,{0:0,1:1,2:2,3:3,4:5,5:4},copy=True)
 
 #Canonicalize multigraphs, storing host graph data.
 hostgraphs = dict()
-mg_perm_canonical,mg_perm_autgens,mg_perm_canonical_map = nty.canonize_multigraph(mg_perm,hostgraphs=hostgraphs) 
+mg_perm_canonical,mg_perm_autgens,mg_perm_canonical_map = nty.canonize_multigraph(mg_perm,
+    color_sort_conditions = [('ext',True)], hostgraphs=hostgraphs) 
 mg_perm_host = hostgraphs['host']
 mg_perm_host_canonical = hostgraphs['host_canonical']
 

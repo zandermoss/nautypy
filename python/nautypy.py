@@ -10,85 +10,84 @@ import pygraphviz as pgv
 from hashable_containers import hmap,hlist,HGraph,HMultiGraph
 from prettytable import PrettyTable
 
+def _canonize(g, _lab, _ptn):
+    """Python wrapper for the C interface `_nautypy.lib.canonize`.
 
-def canonize_simple_graph(g,relabel=True):
-    """Canonize a vertex-colored simple graph.
+    N.B. While the ordering of the labels in `_lab` within each cell of `_ptn`
+    is irrelevant, the ordering of the cells within `ptn_` is important.
+    The canonical label returned from nauty is a permutation of `_lab` 
+    which *respects color cells*. The block of indices ultimately assigned to each
+    input cell are ordered according to `_ptn`. For example, a graph with six vertices
+    and three colors: {(1,4):red, (0,3,5):green, (2):blue} might be represented by
 
-    Interfaces with the NAUTY graph canonization program [https://pallini.di.uniroma1.it/]
-    using Python's C Foreign Function Interface.
+        _lab=[4,1,0,3,5,2]
+        _ptn=[1,0,1,1,0,0]
 
-    Only handles vertex-colored, (not edge-colored) simple (no self-loops, no parallel edges)
-    graphs. Canonization of multigraphs with both vertex and edge coloring is implemented 
-    in :py:func:`nautypy.canonize_multigraph`.
+    In `_ptn`, zeros indicate (inclusive) cell end boundaries, so this is equivalent to the partition
 
-    **Caveat:** our CFF interface to NAUTY, :mod:`_nauty` expects nodes to be zero-indexed. 
-    That is, the node labels must be consecutive integers beginning with zero. If the keyword
-    argument `relabel` is True (by default), the node labels of `g` are 
-    converted to zero-indexed integers, fed to NAUTY, and then converted back to the original
-    labels before returning.
+        [4,1|0,3,5|2]
 
-    Given a simple, vertex-colored graph derived from `networkx.Graph`, canonization
-    proceeds in stages:
+    NAUTY might return the canonical labeling
 
-    1. The node indices of `g` are mapped to zero-indexed integers. 
-    2. The graph `g` is converted to NAUTY sparse representation
-       (see Section 3 of the `NAUTY User's Guide <https://pallini.di.uniroma1.it/Guide.html>`_)
-       for details.
-    3. `g` is canonized using `_nautypy.lib.canonize`. NAUTY computes the
-       'inverse canonical map': a permutation which sends the zero-indexed graph to its canonical
-       labeling (canonical isomorph). NAUTY also returns a generating set for the automorphism
-       group of the zero-indexed graph.
-    4. All indices are mapped from the zero-index back to the original node labels. Thus, the
-       automorphism generators and inverse canonical map are sent from permutations of [0,1,2,...]        to dict-like mappings of the original node labels.
-    5. The canonical isomorph `g_canonical` is computed by applying the inverse canonical map
-       to the input graph `g`.
-    6. The canonical map is constructed from its inverse. The forward mapping is
-       useful in applications where we wish to represent an arbitrary graph G by its canonical
-       isomorph G_c together with the index permutation P such that P(G_c) = G.
-       Such a representation is extremely useful in the construction of scattering amplitudes
-       from (on-shell or off-shell) diagrams.
-       
+        lab=[1,4,3,5,0,2]
+
+    The labels within color cells have been permuted, but the cell boundaries have been respected.
+    Critically, the permutation sending `_lab` to `lab` is **not** the canonical permutation!
+    Rather, the canonical permutation is given by the list `lab` in 'one-line notation'. In this case,
+
+        canonical_map = {0->1, 1->4, 2->3, 3->5, 4->0, 5->2}
+
+    This is the relabeling which sends the canonically labeled graph to the input graph `g`.
+    The inverse map,
+
+        inverse_canonical_map = {0->4, 1->0, 2->5, 3->2, 4->1, 5->3}
+
+    is the map we actually apply to the graph `g` to canonize it in `nautypy.canonize_simple_graph`
+    and `nautypy.canonize_multigraph`. The resulting coloring of the canonically labeled graph is
+
+    {(0,1):red, (2,3,4):green, (5):blue}
+
+    This map is determined by the ordering (red,green,blue) of the cells in `_lab` and `_ptn`.
+    For the purposes of graph matching, this order doesn't matter as long as it's consistent among
+    all calls to NAUTY. For this reason, `nautypy.canonize_simple_graph` simply sorts vertex colors
+    (node attribute dictionaries) as tuples of (key,value) tuples, yielding an arbitrary but consistent
+    color ordering (provided keys and values are comparable).
+
+    On the other hand, `nautypy.canonize_multigraph` adds nodes to the input multigraph to represent
+    edges, and it is convenient to order all edge node colors after all vertex node colors explicitly
+    so that edge labels and vertex labels are never mixed during canonization.
+
     Args:
-        g (networkx.Graph-like): the graph to canonize. Can be of type `networkx.Graph`
-            or a derived class (e.g. `hashable_containers.HGraph`).
-
-    Keyword Args:
-        relabel (bool): if True, perform zero-index relabeling before calling NAUTY,
-            and apply the inverse relabeling before returning.
+        g (networkx.Graph-like): A simple, vertex-labeled (no edge labels!) graph to canonize.
+            The node labels must be sequential integers beginning with zero.
+        _lab (list): A list of the node labels assigning them to the color cells demarkated in `_ptn`
+        _ptn (list): A list of ones and zeros, aligned to `lab`, encoding cells of
+            like color (see Section 3 of the
+            `NAUTY User's Guide <https://pallini.di.uniroma1.it/Guide.html>`_) for details.
 
     Returns:
-        g_canonical (networkx.MultiGraph-like): canonical isomorph of the input graph `g`.
-        g_autgens (list): a list of dict-like automorphism generators of Aut(`g`)
-        g_canonical_map (dict-like): the node label permutation mapping `g_canonical` to
-            the input graph `g`.
+        canonical_map (hashable_containers.hmap): A mapping *from* the labels of the canonical isomorph
+            *to* the input graph `g`.
+        autgens (hashable_containers.hlist): A list of `hashable_containers.hmaps` encoding the generators
+            of the automorphism group of `g`.
     """
-    
-    #Nauty expects zero-indexed consectutive integers as node labels.
-    #Convert from input labeling to zero-indexed integer labeling.
-    if relabel:
-        input_to_zero = {node:index for index,node in enumerate(sorted(g.nodes.keys()))}
-        g_z = HGraph(nx.relabel_nodes(g,input_to_zero,copy=True))
-        zero_to_input = {val:key for key,val in input_to_zero.items()}
-    else:
-        g_z = HGraph(g)
+
     #Initialize memory for nauty canonize()
-    nv = g_z.number_of_nodes()
-    nde = 2*g_z.number_of_edges()
+    nv = g.number_of_nodes()
+    nde = 2*g.number_of_edges()
     v = ffi.new("size_t[]",nv)
     d = ffi.new("int[]",nv)
     e = ffi.new("int[]",nde)
     lab = ffi.new("int[]",nv)
     ptn = ffi.new("int[]",nv)
-    #Compute lab and ptn arrays.
-    _lab,_ptn = _get_color_partition(g_z)
     #Load the nx graph g into nauty sparse format.
     de_counter = 0
     for i in range(0,nv):
         lab[i]=_lab[i]
         ptn[i]=_ptn[i]
-        d[i]=g_z.degree(i)
+        d[i]=g.degree(i)
         v[i]=de_counter
-        neighbors = list(g_z[i].keys())
+        neighbors = list(g[i].keys())
         for m in range(0,d[i]):
             e[v[i]+m] = neighbors[m]
         de_counter+=d[i]
@@ -97,54 +96,17 @@ def canonize_simple_graph(g,relabel=True):
     auts = ffi.new("int***")
     #Invoke canonize()    
     lib.canonize(nv,nde,v,d,e,lab,ptn,n_auts,auts)
-    #Convert _lab, lab, ptn to python lists.
-    label = []
-    canon_label = []
-    partition = []
-    canon_partition = []
-    for i in range(0,nv):
-        canon_label.append(int(lab[i]))
-        label.append(int(_lab[i]))
-        partition.append(int(_ptn[i]))
-        canon_partition.append(int(ptn[i]))
-    #Construct a relabeling map from the zero_indexed labeling to the canonical zero_indexed labeling.
-    #g_z_inverse_canonical_map = dict(zip(canon_label,label))
-    g_z_inverse_canonical_map = {l:i for i,l in enumerate(canon_label)}
-    print("\n-----------simple canon----------")
-    print(f"gz_inv_canmap: {g_z_inverse_canonical_map}")
-    print(f"label          : {label}")
-    print(f"canon_label    : {canon_label}")
-    print(f"partition      : {partition}")
-    print(f"canon_partition: {canon_partition}")
-    print("---------------------------------\n")
-
-    
-    #Conjugate g_z_inverse_canonical_map by zero_to_input to produce g_inverse_canonical_map,
-    #which sends the input-labeled graph G to its canonically input-labeled
-    #isomorph (g_canonical).
-    if relabel:
-        g_inverse_canonical_map = {key:zero_to_input[g_z_inverse_canonical_map[val]] for key,val in input_to_zero.items()}
-    else:
-        g_inverse_canonical_map = g_z_inverse_canonical_map
-    #Construct the canonical isomorph.
-    g_canonical = g.__class__(nx.relabel_nodes(g,g_inverse_canonical_map,copy=True))
-    #Standardize dict order
-    g_canonical = _standardize_graph_encoding(g_canonical)
+    #Construct a relabeling map from lab.
+    canonical_map = hmap({i:int(lab[i]) for i in range(nv)})
     #Convert automorphisms to hmaps and conjugate to input labeling.
-    g_autgens = hlist()
+    autgens = hlist()
     for i in range(0,n_auts[0]):
-        gen_z = hmap({j:auts[0][i][j] for j in range(nv)})
-        if relabel:
-            gen = {key:zero_to_input[gen_z[val]] for key,val in input_to_zero.items()}
-        else:
-            gen = gen_z
-        g_autgens.append(gen)
-    #We will also return the inverse of g_inverse_canonical_map,
-    g_canonical_map = hmap({val:key for key,val in g_inverse_canonical_map.items()})
-    return g_canonical, g_autgens, g_canonical_map
+        gen = hmap({j:auts[0][i][j] for j in range(nv)})
+        autgens.append(gen)
+    return canonical_map, autgens
 
 
-def _get_color_partition(g):
+def _get_color_partition(g,color_sort_conditions=[]):
     """ Given a vertex-colored graph `g`,
     Generate a label list `lab` and color partition `ptn`.
 
@@ -157,50 +119,134 @@ def _get_color_partition(g):
     Args:
         g(hashable_containers.HGraph)
 
+    Keyword Args:
+        color_sort_conditions(list): A list of tuples (key:state) used to establish
+            a partial color ordering among the canonical labels. For example, [('type':'vertex')]
+            would assign all nodes satisfying node['type']=='vertex' integer labels strictly less
+            than nodes satisfying node['type']!='vertex' or not containing the key 'type'.
+            This ordering can be extended by adding tuples to the condition list. For example,
+            [('type':'vertex'),('weight'<1.0)] would first order the node labels according to 
+            the 'type'=='vertex' condition, and then within each of the two partitions (=='vertex'            and !='vertex'/no key 'vertex'), would apply an analogous order using the condition
+            node['weight']<1.0. 
+
     Return:
         lab(list): A list of integer node labels (zero-indexed).
         ptn(list): A list of ones and zeros, aligned to `lab`, encoding cells of
             like color (see Section 3 of the
             `NAUTY User's Guide <https://pallini.di.uniroma1.it/Guide.html>`_) for details.
     """
-
-    #Group nodes by equvalence of their attribute dictionaries.
+    #print(f'color_sort_conditions : {color_sort_conditions}')
+    g = _standardize_graph_encoding(g)
+    print("IN COLOR PARTITION")
+    gprint(g)
     color_cells = g._node.fibers()
-    print("\n===============[g._node]==============")
-    for node,att in g._node.items():
-        print(f"node: {node}")
-        for key,val in att.items():
-            print(f"    {key} : {val}")
-    print("======================================\n")
-    print("\n===============[g._node.fibers()]==============")
-    for att,nodes in color_cells.items():
-        print(type(att))
-        for key,val in att.items():
-            print(f"{key} : {val}")
-        print(f"    cell: {nodes}")
-    print("======================================\n")
-    #print(f"color_cells: {color_cells}")
-    #print(f"sorted(list(color_cells.keys())): {sorted(list(color_cells.keys()))}")
-    print("\n===============[g._node.fibers() <keysorted>]==============")
-    for att in sorted(list(color_cells.keys())):
-        for key,val in att.items():
-            print(f"{key} : {val}")
-        print(f"    cell: {color_cells[att]}")
-    print("======================================\n")
-    #Generate color partition according to color_cells.
+    cell_orders = hmap()
+    for color in color_cells.keys():
+        print(f'color: {color}')
+        order = 0
+        for n,c in enumerate(color_sort_conditions[::-1]):
+            if c[0] in color:
+                coeff = int(color[c[0]]!=c[1])
+            else:
+                coeff = 1
+            order+= coeff*2**n
+            #print(f'    condition: {c}, coeff: {coeff}')
+        cell_orders[color] = order
+        #print(f'order: {order}\n')
+    colors_by_order = cell_orders.fibers()
+    #print(f'colors_by_order : {colors_by_order}')
     lab = []
     ptn = []
-    #label_lists = sorted([sorted(l) for l in color_cells.values()])
-    #for l in label_lists:
-    #    lab += l
-    #    ptn += ([1 for i in range(0,len(l)-1)]+[0,])
-    for color in sorted(list(color_cells.keys())):
-        lab += color_cells[color]
-        ptn += ([1 for i in range(0,len(color_cells[color])-1)]+[0,])
+    for order in sorted(list(colors_by_order.keys())):
+        colors = colors_by_order[order]
+        for color in sorted(colors):
+            lab += sorted(color_cells[color])
+            ptn += ([1 for i in range(0,len(color_cells[color])-1)]+[0,])
     return lab,ptn
 
 
-def canonize_multigraph(mg,relabel=True,hostgraphs=None):
+def canonize_simple_graph(g, color_sort_conditions = []):
+    """Canonize a vertex-colored simple graph.
+
+    Interfaces with the NAUTY graph canonization program [https://pallini.di.uniroma1.it/]
+    using Python's C Foreign Function Interface.
+
+    Only handles vertex-colored, (not edge-colored) simple (no self-loops, no parallel edges)
+    graphs. Canonization of multigraphs with both vertex and edge coloring is implemented 
+    in :py:func:`nautypy.canonize_multigraph`.
+
+    Given a simple, vertex-colored graph derived from `networkx.Graph`, canonization
+    proceeds in stages:
+
+    1. The node indices of `g` are mapped to zero-indexed integers (NAUTY format). 
+    2. The graph `g` is converted to NAUTY sparse representation
+       (see Section 3 of the `NAUTY User's Guide <https://pallini.di.uniroma1.it/Guide.html>`_)
+       for details.
+    3. `g` is canonized using `_nautypy.lib.canonize`. NAUTY computes the
+       'canonical map': a permutation which sends the canonically labeled graph (canonical isomorph)
+       to the input graph. NAUTY also returns a generating set for the automorphism
+       group of the zero-indexed graph.
+    4. All indices are mapped from the zero-index back to the original node labels. Thus, the
+       automorphism generators and canonical map are sent from permutations of [0,1,2,...]
+       to dict-like mappings of the original node labels.
+    5. The canonical isomorph `g_canonical` is computed by applying the inverse canonical map
+       to the input graph `g`.
+       
+    Args:
+        g (networkx.Graph-like): the graph to canonize. Can be of type `networkx.Graph`
+            or a derived class (e.g. `hashable_containers.HGraph`).
+
+    Returns:
+        g_canonical (networkx.Graph-like): canonical isomorph of the input graph `g`. The return object
+            belongs to the same class as the input graph `g`.
+        g_autgens (list): a list of dict-like automorphism generators of Aut(`g`)
+        g_canonical_map (dict-like): the node label permutation mapping `g_canonical` to
+            the input graph `g`.
+    """
+    g = _standardize_graph_encoding(g)    
+    #Convert from input labeling to zero-indexed integer labeling.
+    input_to_zero = {node:index for index,node in enumerate(sorted(g.nodes.keys()))}
+    g_z = HGraph(nx.relabel_nodes(g,input_to_zero,copy=True))
+    zero_to_input = {val:key for key,val in input_to_zero.items()}
+    #Compute lab and ptn arrays.
+    color_cells = g_z._node.fibers()
+    # print("\n===============[g._node.fibers()]==============")
+    # for att,nodes in color_cells.items():
+    #     print(type(att))
+    #     for key,val in att.items():
+    #         print(f"{key} : {val}")
+    #     print(f"    cell: {nodes}")
+    # print("======================================\n")
+    # print("\n===============[g._node.fibers() <keysorted>]==============")
+    # for att in sorted(list(color_cells.keys())):
+    #     for key,val in att.items():
+    #         print(f"{key} : {val}")
+    #     print(f"    cell: {color_cells[att]}")
+    # print("======================================\n")
+    lab, ptn = _get_color_partition(g_z, color_sort_conditions=color_sort_conditions)
+
+    #Canonize
+    g_z_canonical_map, g_z_autgens = _canonize(g_z, lab, ptn)
+    # print("\n-----------[_canonize]----------")
+    # print(f"label              : {lab}")
+    # print(f"canonical_label    : {[g_z_canonical_map[i] for i in range(len(lab))]}")
+    # print("---------------------------------\n")
+    #Convert from zero-indexed integer labeling to input labeling.
+    g_canonical_map = {key:zero_to_input[g_z_canonical_map[val]] for key,val in input_to_zero.items()}
+    g_autgens = hlist()
+    for gen_z in g_z_autgens:
+        gen = {key:zero_to_input[gen_z[val]] for key,val in input_to_zero.items()}
+        g_autgens.append(gen)
+    #Invert the canonical map.
+    g_inverse_canonical_map = hmap({val:key for key,val in g_canonical_map.items()})
+    #Construct the canonical isomorph.
+    g_canonical = g.__class__(nx.relabel_nodes(g,g_inverse_canonical_map,copy=True))
+    #Standardize dict order
+    g_canonical = _standardize_graph_encoding(g_canonical)
+    return g_canonical, g_autgens, g_canonical_map
+
+
+def canonize_multigraph(mg, color_sort_conditions=[], hostgraphs=None):
     """Canonize an edge- and vertex-colored multigraph.
 
     Given a multigraph derived from `networkx.MultiGraph`, canonization
@@ -209,7 +255,7 @@ def canonize_multigraph(mg,relabel=True,hostgraphs=None):
     1. The node indices of `mg` are mapped to zero-indexed integers. 
     2. The multigraph is embedded in a simple, vertex-colored "host" graph derived from
        `networkx.Graph` by :py:func:`nautypy._embed_multigraph`.
-    3. The host graph is passed to :py:func:`nautypy.canonize_simple_graph`, producing
+    3. The host graph is passed to :py:func:`nautypy._canonize`, producing
        the canonical isomorph of the host graph, a list of its automorphism generators,
        and the canonical map which sends the canonical host graph to the input host graph.
     4. The host graph automorphisms and canonical map are converted to the automorphisms
@@ -225,69 +271,120 @@ def canonize_multigraph(mg,relabel=True,hostgraphs=None):
         `networkx.MultiGraph` or a derived class (e.g. `hashable_containers.HMultiGraph`). 
 
     Keyword Args:
-        relabel (bool): if True, perform zero-index relabeling before any calculation,
-            and apply the inverse relabeling before returning.
         hostgraphs(None or dict-like): if not None, update :param:`hostgraphs` with copies
             of the input and canonized host graphs.
 
     Returns:
         mg_canonical (networkx.MultiGraph-like): canonical isomorph of the input multigraph `mg`.
+            The return object belongs to the same class as the input multigraph `mg`.
         mg_autgens (list): a list of dict-like automorphism generators of Aut(`mg`)
         mg_canonical_map (dict-like): the node label permutation mapping mg_canonical to
             the input multigraph `mg`.
     """
-
+    mg = _standardize_graph_encoding(mg)
     #Nauty expects zero-indexed consectutive integers as node labels.
     #Convert from input labeling to zero-indexed integer labeling.
-    if relabel:
-        input_to_zero = {node:index for index,node in enumerate(sorted(mg.nodes.keys()))}
-        mg_z = HMultiGraph(nx.relabel_nodes(mg,input_to_zero,copy=True))
-        zero_to_input = {val:key for key,val in input_to_zero.items()}
-    else:
-        mg_z = HMultiGraph(mg)
+    input_to_zero = {node:index for index,node in enumerate(sorted(mg.nodes.keys()))}
+    mg_z = HMultiGraph(nx.relabel_nodes(mg,input_to_zero,copy=True))
+    zero_to_input = {val:key for key,val in input_to_zero.items()}
     #Embed MultiGraph mg in a simple, vertex-colored host graph G
     g_z = _embed_multigraph(mg_z)
     #Optionally store the host graph.
     if hostgraphs!=None:
-        if relabel:
-            hostgraphs['host'] = nx.relabel_nodes(g_z,zero_to_input,copy=True)
-        else:
-            hostgraphs['host'] = g_z.copy()
+        hostgraphs['host'] = g_z
+
+    #Compute lab and ptn arrays.
+    _node_vertices = hmap({node:g_z._node[node] for node in range(0,mg.order())})
+    vertex_color_cells = _node_vertices.fibers()
+    # print("\n===============[vertex_color_cells]==============")
+    # for att,nodes in vertex_color_cells.items():
+    #     print(type(att))
+    #     for key,val in att.items():
+    #         print(f"{key} : {val}")
+    #     print(f"    cell: {nodes}")
+    # print("======================================\n")
+    # print("\n===============[vertex_color_cells <keysorted>]==============")
+    # for att in sorted(list(vertex_color_cells.keys())):
+    #     for key,val in att.items():
+    #         print(f"{key} : {val}")
+    #     print(f"    cell: {vertex_color_cells[att]}")
+    # print("======================================\n")
+    # _node_edges = hmap({node:g_z._node[node] for node in range(mg.order(),g_z.order())})
+    # edge_color_cells = _node_edges.fibers()
+    # print("\n===============[edge_color_cells]==============")
+    # for att,nodes in edge_color_cells.items():
+    #     print(type(att))
+    #     for key,val in att.items():
+    #         print(f"{key} : {val}")
+    #     print(f"    cell: {nodes}")
+    # print("======================================\n")
+    # print("\n===============[edge_color_cells <keysorted>]==============")
+    # for att in sorted(list(edge_color_cells.keys())):
+    #     for key,val in att.items():
+    #         print(f"{key} : {val}")
+    #     print(f"    cell: {edge_color_cells[att]}")
+    # print("======================================\n")
+    # #Generate color partition according to color_cells.
+    # lab = []
+    # ptn = []
+    # for color in sorted(list(vertex_color_cells.keys())):
+    #     lab += vertex_color_cells[color]
+    #     ptn += ([1 for i in range(0,len(vertex_color_cells[color])-1)]+[0,])
+    # for color in sorted(list(edge_color_cells.keys())):
+    #     lab += edge_color_cells[color]
+    #     ptn += ([1 for i in range(0,len(edge_color_cells[color])-1)]+[0,])
+
+    # Don't mix vertex and edge labels
+    lab, ptn = _get_color_partition(g_z,
+        color_sort_conditions = [('type','vertex')]+color_sort_conditions)
+
     #Compute a canonically labeled host graph CG from g.
-    g_z_canonical, g_z_autgens, g_z_canonical_map = canonize_simple_graph(g_z,relabel=False)
+    #g_z_canonical, g_z_autgens, g_z_canonical_map = canonize_simple_graph(g_z)
+    g_z_canonical_map, g_z_autgens = _canonize(g_z, lab, ptn)
+    # print("\n-----------[_canonize]----------")
+    # print(f"label              : {lab}")
+    # print(f"canonical_label    : {[g_z_canonical_map[i] for i in range(len(lab))]}")
+    # print("---------------------------------\n")
     #Optionally store the canonized host graph.
     if hostgraphs!=None:
-        if relabel:
-            hostgraphs['host_canonical'] = nx.relabel_nodes(g_z_canonical,zero_to_input,copy=True)
-        else:
-            hostgraphs['host_canonical'] = g_z_canonical.copy()
+        g_z_inverse_canonical_map = hmap({val:key for key,val in g_z_canonical_map.items()})
+        hostgraphs['host_canonical'] = nx.relabel_nodes(g_z,g_z_inverse_canonical_map,copy=True)
     #Restrict g_z_canonical_map from the full range of host graph nodes to the
     #nodes of the embedded multigraph.
-    mg_z_canonical_map = hmap({key:val for key,val in g_z_canonical_map.items() if key<mg_z.order()})
-    #Conjugate mg_z_canonical_map zero_to_input.
-    if relabel:
-        print(f"in2zero: {input_to_zero}")
-        print(f"zero2in: {zero_to_input}")
-        print(f"MGZCMAP: {mg_z_canonical_map}")
-        mg_canonical_map = hmap({key:zero_to_input[mg_z_canonical_map[val]] for key,val in input_to_zero.items()})
-    else:
-        mg_canonical_map = hmap(mg_z_canonical_map)
-    #The inverse map sends the input-labeled multigraph mg to its canonically
-    #input-labeled isomorph (mg_canonical).
-    mg_inverse_canonical_map = hmap({val:key for key,val in mg_canonical_map.items()})
-    mg_canonical = mg.__class__(nx.relabel_nodes(mg,mg_inverse_canonical_map,copy=True))
-    #Standardize dict order
-    mg_canonical = _standardize_graph_encoding(mg_canonical)
-    #Restrict host graph automorphism generators to multigraph nodes.
-    #Conjugate multigraph automorphism generators from zero-index to input labeling.
+    #mg_z_canonical_map = hmap({key:val for key,val in g_z_canonical_map.items() if key<mg_z.order()})
+    #Convert from zero-indexed integer labeling to input labeling.
+    mg_canonical_map = {key:zero_to_input[g_z_canonical_map[val]] for key,val in input_to_zero.items()}
     mg_autgens = hlist()
     for gen_z in g_z_autgens:
-        mg_gen_z = hmap({key:val for key,val in gen_z.items() if key<mg.order()})
-        if relabel:
-            mg_gen = {key:zero_to_input[mg_gen_z[val]] for key,val in input_to_zero.items()}
-        else:
-            mg_gen = mg_gen_z
-        mg_autgens.append(mg_gen)
+        gen = {key:zero_to_input[gen_z[val]] for key,val in input_to_zero.items()}
+        mg_autgens.append(gen)
+    #Invert the canonical map.
+    mg_inverse_canonical_map = hmap({val:key for key,val in mg_canonical_map.items()})
+    #Construct the canonical isomorph.
+    mg_canonical = HMultiGraph(nx.relabel_nodes(mg,mg_inverse_canonical_map,copy=True))
+    #Key multi-edges in color-sorted order.
+    mg_canonical_edgesort = HMultiGraph()
+    mg_canonical_edgesort.graph.update(mg_canonical.graph)
+    for node in mg_canonical.nodes:
+        mg_canonical_edgesort.add_node(node,**dict(mg_canonical.nodes[node]))
+    for edgepair in set(mg_canonical.edges()):
+        multiedges = mg_canonical.adj[edgepair[0]][edgepair[1]]
+        colors = sorted(list(multiedges.values()))
+        print(colors)
+        for key,color in enumerate(colors):
+            mg_canonical_edgesort.add_edge(*edgepair,key=key,**color)
+
+    # print("\n==============[mg_canonical]=============")
+    # gprint(mg_canonical)
+    # print("\n==============[mg_canonical_edgesort]=============")
+    # gprint(mg_canonical_edgesort)
+    # print()
+
+    #Convert to input graph class
+    mg_canonical = mg.__class__(mg_canonical_edgesort)
+    #Standardize dict order
+    mg_canonical = _standardize_graph_encoding(mg_canonical)
+
     return mg_canonical, mg_autgens, mg_canonical_map
 
 
@@ -349,7 +446,7 @@ def _embed_multigraph(mg):
     Returns:
         g(hashable_containers.HGraph): The simple "host graph" encoding `mg`.
     """
-
+    #mg = _standardize_graph_encoding(mg)
     g = HGraph()
     #Copy the graph attribute dict from mg to g.
     g.graph.update(mg.graph)
@@ -370,6 +467,7 @@ def _embed_multigraph(mg):
         g.add_edge(node,edge[0])
         g.add_edge(node,edge[1])
         node += 1
+    #g = _standardize_graph_encoding(g)
     return g
 
 
@@ -415,8 +513,15 @@ def _extract_multigraph(g):
             del mg.edges[edge]["type"]
     return mg
 
+def aut_coset_rep(canonical_map,aut_gens):
+    """ Mod out automorphisms from the canonical map.
 
-
+        Applying `nautypy.canonize_simple_graph`
+        to any two equivalent graphs g1=g2 (multigraphs mg1=mg2) will always return
+        the same canonical isomorph g_canon (mg_canon). However, because the ordering of
+        the nodes
+    """
+    return
 
 def gprint(_g):
     """ Pretty-print graph data.

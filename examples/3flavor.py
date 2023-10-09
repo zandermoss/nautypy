@@ -39,6 +39,15 @@ mg.add_edge(3,5,color="green")
 mg.add_edge(4,5,color="blue")
 mg.add_edge(4,5,color="blue")
 
+
+for edge in set(mg.edges()):
+    dat = mg.adj[edge[0]][edge[1]]
+    print(f'{edge} : {dat}')
+
+for edge in mg.edges:
+    print(f'{edge} : {mg.edges[edge]}')
+
+
 #Permute multigraph.
 mg_perm = nx.relabel_nodes(mg,{0:0,1:1,2:2,3:3,4:5,5:4},copy=True)
 
