@@ -39,38 +39,29 @@ mg.add_edge(3,5,color="green")
 mg.add_edge(4,5,color="blue")
 mg.add_edge(4,5,color="blue")
 
-
-for edge in set(mg.edges()):
-    dat = mg.adj[edge[0]][edge[1]]
-    print(f'{edge} : {dat}')
-
-for edge in mg.edges:
-    print(f'{edge} : {mg.edges[edge]}')
-
-
 #Permute multigraph.
 mg_perm = nx.relabel_nodes(mg,{0:0,1:1,2:2,3:3,4:5,5:4},copy=True)
 
-# #Canonicalize multigraphs.
-# mg_canonical,mg_autgens,mg_canonical_map = nty.canonize_multigraph(mg) 
-# mg_perm_canonical,mg_perm_autgens,mg_perm_canonical_map = nty.canonize_multigraph(mg_perm) 
-#
-# #Compare mg, mg_perm, mg_canonical, mg_perm_canonical.
-# print(f'mg Canonical Map: {mg_canonical_map}')
-# print(f'mg_perm Canonical Map: {mg_perm_canonical_map}\n')
-# print('Check inequality of mg, mg_perm and equality of mg_canonical, mg_perm_canonical')
-# print(f'(mg = mg_perm)? {nx.utils.graphs_equal(mg,mg_perm)}')
-# print(f'(mg_canonical = mg_perm_canonical)? {nx.utils.graphs_equal(mg_canonical,mg_perm_canonical)}\n')
-#
-# #Prettyprint graph data.
-# print("MultiGraph")
-# nty.gprint(mg)
-# print("Permuted MultiGraph")
-# nty.gprint(mg_perm)
-# print("Canonical MultiGraph")
-# nty.gprint(mg_canonical)
-# print("Canonical Permuted MultiGraph")
-# nty.gprint(mg_perm_canonical)
+#Canonicalize multigraphs.
+mg_canonical,mg_autgens,mg_canonical_map = nty.canonize_multigraph(mg) 
+mg_perm_canonical,mg_perm_autgens,mg_perm_canonical_map = nty.canonize_multigraph(mg_perm) 
+
+#Compare mg, mg_perm, mg_canonical, mg_perm_canonical.
+print(f'mg Canonical Map: {mg_canonical_map}')
+print(f'mg_perm Canonical Map: {mg_perm_canonical_map}\n')
+print('Check inequality of mg, mg_perm and equality of mg_canonical, mg_perm_canonical')
+print(f'(mg = mg_perm)? {nx.utils.graphs_equal(mg,mg_perm)}')
+print(f'(mg_canonical = mg_perm_canonical)? {nx.utils.graphs_equal(mg_canonical,mg_perm_canonical)}\n')
+
+#Prettyprint graph data.
+print("MultiGraph")
+nty.gprint(mg)
+print("Permuted MultiGraph")
+nty.gprint(mg_perm)
+print("Canonical MultiGraph")
+nty.gprint(mg_canonical)
+print("Canonical Permuted MultiGraph")
+nty.gprint(mg_perm_canonical)
 
 #Draw graphs.
 def draw_diagram(_g,title=''):
@@ -87,13 +78,13 @@ def draw_diagram(_g,title=''):
 ax1 = plt.subplot(221)
 draw_diagram(mg,title="MultiGraph")
 
-# ax2 = plt.subplot(222)
-# draw_diagram(mg_canonical,title="Canonical MultiGraph")
-#
-# ax3 = plt.subplot(223)
-# draw_diagram(mg_perm,title="Permuted MultiGraph")
-#
-# ax4 = plt.subplot(224)
-# draw_diagram(mg_perm_canonical,title="Canonical Permuted MultiGraph")
-#
+ax2 = plt.subplot(222)
+draw_diagram(mg_canonical,title="Canonical MultiGraph")
+
+ax3 = plt.subplot(223)
+draw_diagram(mg_perm,title="Permuted MultiGraph")
+
+ax4 = plt.subplot(224)
+draw_diagram(mg_perm_canonical,title="Canonical Permuted MultiGraph")
+
 plt.show()
