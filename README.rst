@@ -111,7 +111,7 @@ Documentation
 =============
 * Docs built with `Sphinx <https://www.sphinx-doc.org/>`_.
 
-* Complete documentation available at **FIXME**
+* Complete documentation available at https://zandermoss.github.io/nautypy/
 
 Building Docs
 -------------
