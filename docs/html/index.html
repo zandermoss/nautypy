@@ -79,9 +79,11 @@
 <p>NetworkX has built-in methods for pair-wise isomorphism (graph matching), but using pair matching to classify n graphs into m isomorphism classes requires O(n*m) comparisons. Canonization, on the other hand, produces representative isomorphs for each class, and thus permits classification with O(n) canonization operations, plus the (trivial) overhead of hash table insertion.</p>
 <p>There is a nice, pre-existing python interface to NAUTY, <a class="reference external" href="https://github.com/pdobsan/pynauty">pynauty</a>, but it does not support multigraphs, which are essential for calculations with loop diagrams, nor does it integrate with NetworkX out of the box.</p>
 <p>Usage of <code class="docutils literal notranslate"><span class="pre">nautypy</span></code> is demonstrated in the examples. Translation between multigraphs and simple graphs is explained in detail in <code class="docutils literal notranslate"><span class="pre">examples/3flavor_hostgraphs.py</span></code> and in the documentation.</p>
+<p>Reference documentation is available at <a class="reference external" href="https://zandermoss.github.io/nautypy/">https://zandermoss.github.io/nautypy/</a></p>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h2>
 <ul class="simple">
+<li><p>Source code is available at <a class="reference external" href="https://github.com/zandermoss/nautypy">https://github.com/zandermoss/nautypy</a></p></li>
 <li><p>The C interface to NAUTY, <code class="docutils literal notranslate"><span class="pre">libnautypy</span></code>, is built from source (<code class="docutils literal notranslate"><span class="pre">src/nautypy.c</span></code>, <code class="docutils literal notranslate"><span class="pre">include/nautypy.h</span></code>) using the <a class="reference external" href="https://mesonbuild.com">Meson build system</a>.
 If you are unfamiliar with Meson, take a look at their <a class="reference external" href="https://mesonbuild.com/IndepthTutorial.html">in-depth tutorial</a>.</p></li>
 <li><p>The python module <code class="docutils literal notranslate"><span class="pre">nautypy</span></code> calls the C function <code class="docutils literal notranslate"><span class="pre">canonize()</span></code> defined in <code class="docutils literal notranslate"><span class="pre">libnautypy</span></code> using the <a class="reference external" href="https://cffi.readthedocs.io/en/stable/">C Foreign Function Interface</a>.
@@ -198,7 +200,6 @@ to <a class="reference external" href="https://pytest.org/">Pytest</a>.</p></li>
 <h2>Documentation<a class="headerlink" href="#documentation" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>Docs built with <a class="reference external" href="https://www.sphinx-doc.org/">Sphinx</a>.</p></li>
-<li><p>Complete documentation available at <a class="reference external" href="https://zandermoss.github.io/nautypy/">https://zandermoss.github.io/nautypy/</a></p></li>
 </ul>
 <section id="building-docs">
 <h3>Building Docs<a class="headerlink" href="#building-docs" title="Link to this heading"></a></h3>
