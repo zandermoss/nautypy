@@ -6,6 +6,5 @@ prettytable
 pytest
 numpy
 scipy
-time
 sympy
 colorama
