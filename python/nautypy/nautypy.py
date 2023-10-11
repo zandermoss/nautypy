@@ -165,8 +165,50 @@ def _get_color_partition(g, color_sort_conditions=[]):
     colors_by_order = cell_orders.fibers()
     lab = []
     ptn = []
+    # print("\n=====color_cells=====")
+    # for key,val in color_cells.items():
+    #     print("---------------")
+    #     print(f"{val}:\n")
+    #     for k2,v2 in sorted(key.items()):
+    #         print(f"    {k2}:    {v2}")
+    #     print("\n")
+    # print("\n\n")
+    # print("\n=====colors_by_order=====")
+    # print(colors_by_order)
+    # for key,val in colors_by_order.items():
+    #     print("---------------")
+    #     print(f"{key}:\n")
+    #     for entry in val:
+    #         print("###")
+    #         for k2,v2 in sorted(entry.items()):
+    #             print(f"    {k2}:    {v2}")
+    #     print("\n")
+    # print("\n\n")
     for order in sorted(list(colors_by_order.keys())):
         colors = colors_by_order[order]
+        # print("---colors----")
+        # for color in colors:
+        #     print("**********")
+        #     for key,val in color.items():
+        #         print(f'{key}:    {val}')
+        #     print("$$$$$$$$$$")
+        #     print(sorted(color.items()))
+        # print("-------------")
+        # print(sorted(colors[0].items()))
+        # print(sorted(colors[1].items()))
+        # print("@@@@@@@@@@(color subtypes)@@@@@@@@@@")
+        # print("**colors[0]**")
+        # for key,val in colors[0].items():
+        #     print(f"key: {key}    type(key): {type(key)}")
+        #     print(f"val: {val}    type(val): {type(val)}")
+        #     print()
+        # print("**colors[1]**")
+        # for key,val in colors[1].items():
+        #     print(f"key: {key}    type(key): {type(key)}")
+        #     print(f"val: {val}    type(val): {type(val)}")
+        #     print()
+        # print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+        # print(sorted(colors[0].items())<sorted(colors[1].items()))
         for color in sorted(colors):
             lab += sorted(color_cells[color])
             ptn += ([1 for i in range(0,len(color_cells[color])-1)]+[0,])
@@ -288,9 +330,7 @@ def canonize_multigraph(mg, color_sort_conditions=[], hostgraphs=None):
     if hostgraphs!=None:
         hostgraphs['host'] = g_z
     #Compute lab and ptn arrays.
-    _node_vertices = hmap({node:g_z._node[node] for node in range(0,mg.order())})
-    vertex_color_cells = _node_vertices.fibers()
-    # Don't mix vertex and edge labels
+    #Don't mix vertex and edge labels
     lab, ptn = _get_color_partition(g_z,
         color_sort_conditions = [('type','vertex')]+color_sort_conditions)
     #Compute a canonically labeled host graph CG from g.
